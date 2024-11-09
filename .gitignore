@@ -1,0 +1,9 @@
+# Ignore build output
+/build/
+
+# Ignore Go-related files
+*.exe
+*.out
+*.log
+*.test
+.DS_Store
