@@ -1,11 +1,13 @@
 package cmd
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/sirupsen/logrus"
 )
@@ -148,10 +150,63 @@ func createCustomLogger() *logrus.Logger {
 	return logger
 }
 
-// runCommand is a helper function to run shell commands
 func runCommand(name string, args ...string) error {
 	cmd := exec.Command(name, args...)
+
+	// Log the command if in debug mode
+	if logrus.GetLevel() == logrus.DebugLevel {
+		logrus.Debugf("Executing command: %s %s", name, strings.Join(args, " "))
+	}
+
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
+}
+
+// ensurePgDump checks if pg_dump is installed locally, logs the version, and installs it if necessary
+func ensurePgDump() error {
+	cmd := exec.Command("pg_dump", "--version")
+	output, err := cmd.Output()
+	if err != nil {
+		// Attempt to install pg_dump if not found
+		fmt.Println("pg_dump not found, attempting to install...")
+		return installPgDump()
+	}
+
+	// Log the pg_dump version
+	fmt.Printf("✅ pg_dump version found: %s\n", output)
+	return nil
+}
+
+// installPgDump installs pg_dump based on the operating system
+func installPgDump() error {
+	switch runtime.GOOS {
+	case "darwin":
+		return runCommand("brew", "install", "postgresql")
+	case "linux":
+		if err := runCommand("sudo", "apt", "update"); err != nil {
+			return err
+		}
+		return runCommand("sudo", "apt", "install", "-y", "postgresql-client")
+	default:
+		return fmt.Errorf("unsupported OS: %s", runtime.GOOS)
+	}
+}
+
+// killProcessOnPort kills any process using the specified port.
+func killProcessOnPort(port string) error {
+	cmd := exec.Command("lsof", "-t", "-i", fmt.Sprintf(":%s", port))
+	output, err := cmd.Output()
+	if err != nil {
+		return fmt.Errorf("failed to find process on port %s: %w", port, err)
+	}
+
+	// Get PID from the output and kill the process
+	pid := string(bytes.TrimSpace(output))
+	if pid == "" {
+		return fmt.Errorf("no process found on port %s", port)
+	}
+
+	killCmd := exec.Command("kill", pid)
+	return killCmd.Run()
 }
