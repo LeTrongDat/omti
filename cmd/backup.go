@@ -17,11 +17,11 @@ var backupCmd = &cobra.Command{
 	Use: "backup <db_config> <local_save_path>",
 	Short: `Backup a PostgreSQL database, locally or over SSH.
 	
-db_config: <username>:<password>@<host>:<port>/<dbname>
-e.g., postgres:v8hlDV0yMAHHlIurYupj@10.1.0.54:15432/golang
+		db_config: <username>:<password>@<host>:<port>/<dbname>
+		e.g., postgres:v8hlDV0yMAHHlIurYupj@10.1.0.54:15432/golang
 
---remote: <user>@<host>:<remote-db-port>
-e.g., --remote admin@192.168.1.10:5432`,
+		--remote: <user>@<host>:<remote-db-port>
+		e.g., --remote admin@192.168.1.10:5432`,
 	Args: cobra.ExactArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
 		dbConfig := args[0]
