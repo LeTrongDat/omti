@@ -1,13 +1,11 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
-	"runtime"
-	"strings"
 
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
@@ -20,50 +18,47 @@ var createCmd = &cobra.Command{
 		repoName := args[0]
 		folderPath := args[1]
 
-		logger := logrus.New()
-		logger.SetFormatter(&logrus.TextFormatter{
-			DisableTimestamp: true,
-		})
+		logger := createCustomLogger()
+		logger.Info("🚀 Starting the repository creation process")
 
-		logger.Info("Starting the repository creation process")
+		// Run all necessary environment checks before proceeding
+		if err := checkEnvironment(); err != nil {
+			logger.Fatalf("❌ Environment checks failed: %v", err)
+		}
 
-		// Step 1: Check if GitHub CLI (gh) is installed
-		logger.Info("Checking if GitHub CLI is installed")
-		if !isCommandAvailable("gh") {
-			logger.Warn("GitHub CLI not found. Installing it now...")
-			if err := installGH(); err != nil {
-				logger.Fatalf("Failed to install GitHub CLI: %v", err)
-			}
+		// Check if the repository already exists
+		exists, err := repoExists(repoName)
+		if err != nil {
+			logger.Fatalf("❌ Failed to check if repository exists: %v", err)
+		}
+		if exists {
+			logger.Infof("✅ Repository %s already exists, skipping creation", repoName)
 		} else {
-			logger.Info("GitHub CLI is already installed")
-		}
-
-		// Step 2: Authenticate with GitHub if needed
-		logger.Info("Checking GitHub authentication")
-		if !isAuthenticated() {
-			logger.Warn("GitHub authentication not detected. Logging in...")
-			if err := authenticateGH(); err != nil {
-				logger.Fatalf("Failed to authenticate with GitHub: %v", err)
+			// Create new GitHub repository if it doesn't exist
+			logger.Infof("Creating new GitHub repository: %s", repoName)
+			if err := createRepo(repoName); err != nil {
+				logger.Fatalf("❌ Failed to create GitHub repository: %v", err)
 			}
+			logger.Infof("✅ Repository %s created successfully", repoName)
+		}
+
+		// Check if the repository is empty (has no commits) before pushing
+		isEmpty, err := repoIsEmpty(repoName)
+		if err != nil {
+			logger.Fatalf("❌ Failed to check if repository is empty: %v", err)
+		}
+		if isEmpty {
+			// Push folder to GitHub as the first commit if the repo is empty
+			logger.Infof("Pushing %s to GitHub", folderPath)
+			if err := pushToRepo(repoName, folderPath); err != nil {
+				logger.Fatalf("❌ Failed to push folder to repository: %v", err)
+			}
+			logger.Info("✅ Folder pushed successfully")
 		} else {
-			logger.Info("GitHub authentication is already set up")
+			logger.Infof("✅ Repository %s already has commits, skipping push", repoName)
 		}
 
-		// Step 3: Create new GitHub repository
-		logger.Infof("Creating new GitHub repository: %s", repoName)
-		if err := createRepo(repoName); err != nil {
-			logger.Fatalf("Failed to create GitHub repository: %v", err)
-		}
-		logger.Infof("Repository %s created successfully", repoName)
-
-		// Step 4: Push folder to GitHub as the first commit
-		logger.Infof("Pushing %s to GitHub", folderPath)
-		if err := pushToRepo(repoName, folderPath); err != nil {
-			logger.Fatalf("Failed to push folder to repository: %v", err)
-		}
-		logger.Info("Folder pushed successfully")
-
-		logger.Info("Repository creation process completed successfully!")
+		logger.Info("🎉 Repository creation process completed successfully!")
 	},
 }
 
@@ -71,46 +66,55 @@ func init() {
 	repoCmd.AddCommand(createCmd)
 }
 
-// Check if a command is available on the system
-func isCommandAvailable(name string) bool {
-	_, err := exec.LookPath(name)
-	return err == nil
-}
-
-// Install GitHub CLI based on the operating system
-func installGH() error {
-	switch runtime.GOOS {
-	case "darwin":
-		return runCommand("brew", "install", "gh")
-	case "linux":
-		if err := runCommand("sudo", "apt", "update"); err != nil {
-			return err
+// repoExists checks if the GitHub repository already exists
+func repoExists(repoName string) (bool, error) {
+	cmd := exec.Command("gh", "repo", "view", repoName)
+	if err := cmd.Run(); err != nil {
+		// If the command fails with an exit code, the repository likely doesn't exist
+		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() != 0 {
+			return false, nil
 		}
-		return runCommand("sudo", "apt", "install", "-y", "gh")
-	default:
-		return fmt.Errorf("unsupported OS: %s", runtime.GOOS)
+		return false, err
 	}
+	return true, nil // Repo exists if the command succeeded
 }
 
-// Check if the user is authenticated with GitHub
-func isAuthenticated() bool {
-	output, err := exec.Command("gh", "auth", "status").CombinedOutput()
-	return err == nil && strings.Contains(string(output), "Logged in")
+// repoIsEmpty checks if the GitHub repository has no commits (is empty)
+func repoIsEmpty(repoName string) (bool, error) {
+	// Run the `gh` command to retrieve repository information
+	cmd := exec.Command("gh", "repo", "view", repoName, "--json", "defaultBranchRef")
+	output, err := cmd.Output()
+	if err != nil {
+		return false, fmt.Errorf("failed to retrieve repository info: %w", err)
+	}
+
+	// Define a local struct to match the JSON output structure
+	var result struct {
+		DefaultBranchRef struct {
+			Name string `json:"name"`
+		} `json:"defaultBranchRef"`
+	}
+
+	// Unmarshal the JSON output into the local struct
+	if err := json.Unmarshal(output, &result); err != nil {
+		return false, fmt.Errorf("failed to parse JSON output: %w", err)
+	}
+
+	// Check if the name of the default branch is empty, indicating no commits
+	return result.DefaultBranchRef.Name == "", nil
 }
 
-// Authenticate with GitHub
-func authenticateGH() error {
-	return runCommand("gh", "auth", "login")
-}
-
-// Create a new repository with the given name on GitHub
+// createRepo creates a new repository on GitHub using the GitHub CLI
 func createRepo(repoName string) error {
 	return runCommand("gh", "repo", "create", repoName, "--public", "--source=.", "--remote=origin")
 }
 
-// Push the specified folder to GitHub as the first commit
+// pushToRepo initializes and pushes a local folder to the GitHub repository
 func pushToRepo(repoName, folderPath string) error {
-	os.Chdir(folderPath)
+	if err := os.Chdir(folderPath); err != nil {
+		return fmt.Errorf("failed to change directory: %w", err)
+	}
+
 	if err := runCommand("git", "init"); err != nil {
 		return err
 	}
@@ -124,12 +128,4 @@ func pushToRepo(repoName, folderPath string) error {
 		return err
 	}
 	return runCommand("git", "push", "-u", "origin", "main")
-}
-
-// Helper function to run a shell command
-func runCommand(name string, args ...string) error {
-	cmd := exec.Command(name, args...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
 }
