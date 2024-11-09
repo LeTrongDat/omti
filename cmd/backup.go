@@ -11,8 +11,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var sshKeyPath = filepath.Join(os.Getenv("HOME"), ".ssh", "id_rsa.pub")
-
 // backupCmd represents the command to back up a PostgreSQL database
 var backupCmd = &cobra.Command{
 	Use:   "backup <remote_user> <remote_host> <remote_port> <remote_db_port> <db_name> <db_user> <db_password> <local_save_path>",
