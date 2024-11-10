@@ -15,13 +15,8 @@ var logLevel string
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "omti",
-	Short: "A brief description of your application",
-	Long: `A longer description that spans multiple lines and likely contains
-examples and usage of using your application. For example:
-
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+	Short: "A useful tool for managing GitHub repositories and interacting with remote/local databases",
+	Long:  `This tool is designed to simplify the process of managing GitHub repositories and interacting with remote/local databases. It provides a CLI interface that allows you to perform various operations such as creating repositories, pushing changes, pulling updates, and interacting with databases. With its user-friendly commands and features, it streamlines your workflow and enhances productivity.`,
 	// Uncomment the following line if your bare application
 	// has an action associated with it:
 	// Run: func(cmd *cobra.Command, args []string) { },
