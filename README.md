@@ -1,7 +1,3 @@
-Certainly! Here is the README with a structured table format:
-
----
-
 # OMTI Tool
 
 `omti` is a command-line tool designed to simplify GitHub repository management and database operations. It offers easy-to-use commands for tasks like creating repositories, pushing changes, pulling updates, and managing databases. This tool helps streamline workflows and boosts productivity.
@@ -69,7 +65,3 @@ postgres:v8hlDV0yMAHHlIurYupj@10.1.0.54:15432/golang
 |-------------------|----------------------------------------------------|---------------|
 | `-h`, `--help`    | Display help for any command.                      |               |
 | `--log-level`     | Set log level (`debug`, `info`, `warn`, `error`).  | `info`        |
-
----
-
-This table format should make it easier to view and navigate the available commands and their descriptions.
